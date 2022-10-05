@@ -4,6 +4,8 @@ import pendulum
 import logging
 import os
 import sys
+import time
+import requests
 from clickhouse_driver import Client
 from io import BytesIO
 from fastwarc.warc import ArchiveIterator, WarcRecordType
@@ -29,9 +31,9 @@ parser = argparse.ArgumentParser(description="YouTube Discussions WARC Processor
 parser.add_argument("--dbhost", default="localhost", help="Clickhouse server address")
 parser.add_argument("--dbport", type=int, default=9000, help="Clickhouse server port")
 parser.add_argument("--dbuser", default="default", help="Clickhouse user")
-parser.add_argument("--batch", type=int, default=10000, help="Clickhouse batch size")
-parser.add_argument("warc", help="Path to WARC file")
-parser.add_argument("log", help="Path to log file")
+parser.add_argument("--batch", type=int, default=20000, help="Clickhouse batch size")
+parser.add_argument("warc", help="Path/URL to WARC (gz) file")
+parser.add_argument("log", help="Path to log folder")
 args = parser.parse_args()
 
 logging.basicConfig(
@@ -39,7 +41,7 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.INFO,
     handlers=[
-        logging.FileHandler(args.log),
+        logging.FileHandler(os.path.join(args.log, f"{int(time.time())}-{os.getpid()}.log")),
         logging.StreamHandler()
     ]
 )
@@ -60,10 +62,17 @@ clickhouse = ClickhouseBulkInsert(client, args.batch)
 logging.info(f"Extracting {args.warc}")
 
 req_count, com_count, hsc_count = 0, 0, 0
-stream = GZipStream(FileStream(args.warc, "rb"))
+if args.warc.startswith("http"):
+    logging.info("Making HTTP request")
+    resp = requests.get(args.warc, stream=True)
+    stream = resp.raw
+else:
+    logging.info("Reading from local file")
+    stream = GZipStream(FileStream(args.warc, "rb"))
 for rec in ArchiveIterator(stream, record_types=WarcRecordType.response):
-    if rec.http_headers.status_code != 200:
-        logging.warning(f"Non-200 response {rec.http_headers.status_code} (req #{req_count+1})")
+    sc = rec.http_headers.status_code
+    if sc != 200:
+        logging.warning(f"Non-200 response {sc} (req #{req_count+1}; offset {rec.stream_pos})")
         hsc_count += 1
         continue
     req_count += 1
@@ -106,3 +115,4 @@ for rec in ArchiveIterator(stream, record_types=WarcRecordType.response):
 # Write any leftovers to database
 clickhouse.write()
 logging.info(f"Finished - {req_count} responses, {com_count} comments, {hsc_count} non-200 responses")
+logging.info(f"Uncompressed stream length: {rec.content_length + rec.stream_pos}")

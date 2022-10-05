@@ -8,6 +8,7 @@ fastwarc = "*"
 orjson = "*"
 clickhouse-driver = {extras = ["numpy", "zstd"], version = "*"}
 pendulum = "*"
+requests = "*"
 
 [dev-packages]
 ipykernel = "*"
