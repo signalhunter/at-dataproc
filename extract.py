@@ -36,12 +36,13 @@ parser.add_argument("warc", help="Path/URL to WARC (gz) file")
 parser.add_argument("log", help="Path to log folder")
 args = parser.parse_args()
 
+pid = os.getpid()
 logging.basicConfig(
-    format="%(asctime)s %(levelname)s: %(message)s",
+    format=f"%(asctime)s {pid} %(levelname)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.INFO,
     handlers=[
-        logging.FileHandler(os.path.join(args.log, f"{int(time.time())}-{os.getpid()}.log")),
+        logging.FileHandler(os.path.join(args.log, f"{int(time.time())}-{pid}.log")),
         logging.StreamHandler()
     ]
 )
