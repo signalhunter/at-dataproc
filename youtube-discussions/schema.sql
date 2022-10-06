@@ -9,5 +9,5 @@ CREATE TABLE youtube_discussions (
   text String NULL CODEC(ZSTD),
   profile_pic String NOT NULL CODEC(ZSTD)
 )
-ENGINE MergeTree()
-PRIMARY KEY (channel_id);
+ENGINE ReplacingMergeTree()
+ORDER BY (channel_id, comment_id);
